@@ -1,37 +1,15 @@
 import { EvilIcons, Feather, FontAwesome, FontAwesome6, Ionicons, MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
-import { useState } from 'react';
-import { Dimensions, FlatList, ImageBackground, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { createRef, useEffect, useMemo, useState } from 'react';
+import { Alert, Dimensions, FlatList, ImageBackground, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { AntDesign } from '@expo/vector-icons';
+import { useFormik } from 'formik';
+import * as Yup from 'yup';
 
 export default function App() {
+  const [openModal, setOpenModal] = useState(false);
   const [isChatting, setIsChatting] = useState(false);
-  const [list, setList] = useState([
-    {
-      id: 1,
-      description: "Carne",
-      uni: '1Kg',
-      amount: 1,
-    },
-    {
-      id: 2,
-      description: "Feijão",
-      uni: '1Kg',
-      amount: 1,
-    },
-    {
-      id: 3,
-      description: "Feijão",
-      uni: '1Kg',
-      amount: 1,
-    },
-    {
-      id: 4,
-      description: "Feijão",
-      uni: '1Kg',
-      amount: 1,
-    }
-  ]);
+  const [list, setList] = useState([]);
 
   const carrocel = [
     {
@@ -87,6 +65,93 @@ export default function App() {
     },
   ]
 
+  const validationSchema = useMemo(() => Yup.object().shape({
+    produto: Yup.string()
+      .required('O nome do produto é obrigatório'),
+    quantidade: Yup.number()
+      .required('A quantidade é obrigatória')
+      .positive('A quantidade deve ser maior que zero')
+      .integer('A quantidade deve ser um número inteiro'),
+    valor: Yup.string()
+      .required('O valor é obrigatório')
+  }), []);
+
+  const formik = useFormik({
+    initialValues: {
+      produto: '',
+      quantidade: '',
+      valor: ''
+    },
+    validationSchema: validationSchema,
+    onSubmit: (values, { resetForm }) => {
+      const newItem = {
+        id: list.length + 1,
+        description: values.produto,
+        uni: values.quantidade,
+        amount: parseFloat(values.valor.replaceAll('.', '').replace(',', '.'))
+      };
+      setList([...list, newItem]);
+      resetForm();
+      setOpenModal(false);
+    }
+  });
+
+  const flatListRef = createRef();
+
+  const [activeIndex, setActiveIndex] = useState(0);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setActiveIndex((prevIndex) => (prevIndex + 1) % carrocel.length);
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    if (flatListRef.current) {
+      flatListRef.current.scrollToIndex({ index: activeIndex, animated: true });
+    }
+  }, [activeIndex]);
+
+  function moeda(e) {
+    let value = e;
+    value = value.replace(/\D/g, "");
+    value = value.replace(/(\d)(\d{2})$/, "$1,$2");
+    value = value.replace(/(?=(\d{3})+(\D))\B/g, ".");
+    return value;
+  }
+
+  const formatCurrency = (value) => {
+    return value
+      .toLocaleString('pt-BR', {
+        style: 'currency',
+        currency: 'BRL',
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+        useGrouping: true,
+      })
+  }
+
+  const handleDelete = (id) => {
+    Alert.alert(
+      "Confirmação de Exclusão",
+      "Você tem certeza que deseja remover este item?",
+      [
+        {
+          text: "Cancelar",
+          style: "cancel"
+        },
+        {
+          text: "OK",
+          onPress: () => {
+            setList(list.filter(item => item.id !== id));
+          }
+        }
+      ]
+    );
+  };
+
   return (
     <View className="flex-1 pt-10 bg-white relative">
       <StatusBar style="dark" backgroundColor='#A5F2F3' />
@@ -99,6 +164,7 @@ export default function App() {
 
       <View className="flex items-center">
         <FlatList
+          ref={flatListRef}
           data={carrocel}
           horizontal
           pagingEnabled
@@ -146,11 +212,76 @@ export default function App() {
         />
       </View>
 
+      {
+        openModal && (
+          <View className="absolute z-10 left-0 right-0 bottom-0 bg-gray-900/80 blur-xl w-full h-full flex justify-center items-center p-6">
+            <View className="flex flex-col w-full items-center rounded-md bg-white p-5 space-y-4">
+              <Text className="font-bold text-gray-900 text-2xl">Adicionar item</Text>
+
+              <View className='flex flex-col w-full'>
+                <Text className="font-semibold text-gray-700 text-xl">Produto</Text>
+                <TextInput
+                  className="border bg-white rounded-md w-full p-2 text-gray-950 text-md"
+                  placeholder='Digite o nome do produto...'
+                  onChangeText={formik.handleChange('produto')}
+                  value={formik.values.produto}
+                />
+                {formik.touched.produto && formik.errors.produto ? (
+                  <Text className="text-red-600">{formik.errors.produto}</Text>
+                ) : null}
+              </View>
+
+              <View className='flex flex-col w-full'>
+                <Text className="font-semibold text-gray-700 text-xl">Quantidade</Text>
+                <TextInput
+                  keyboardType='numeric'
+                  className="border bg-white rounded-md w-full p-2 text-gray-950 text-md"
+                  placeholder='Digite a quantidade...'
+                  onChangeText={formik.handleChange('quantidade')}
+                  value={formik.values.quantidade}
+                />
+                {formik.touched.quantidade && formik.errors.quantidade ? (
+                  <Text className="text-red-600">{formik.errors.quantidade}</Text>
+                ) : null}
+              </View>
+
+              <View className='flex flex-col w-full'>
+                <Text className="font-semibold text-gray-700 text-xl">Valor</Text>
+                <TextInput
+                  keyboardType='numeric'
+                  className="border bg-white rounded-md w-full p-2 text-gray-950 text-md"
+                  placeholder='Digite o valor...'
+                  onChangeText={(text) => formik.setFieldValue('valor', moeda(text))}
+                  value={formik.values.valor}
+                />
+                {formik.touched.valor && formik.errors.valor ? (
+                  <Text className="text-red-600">{formik.errors.valor}</Text>
+                ) : null}
+              </View>
+
+              <TouchableOpacity
+                className="rounded-lg w-full bg-green-600 p-3 flex items-center justify-center"
+                onPress={formik.handleSubmit}
+              >
+                <Text className="text-center uppercase font-semibold text-white">Adicionar</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                className="rounded-lg w-full border-2 bg-white border-red-600 p-3 flex items-center justify-center"
+                onPress={() => setOpenModal(false)}
+              >
+                <Text className="text-center uppercase font-semibold text-red-600">Cancelar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )
+      }
+
       <View className="flex w-full items-center flex-col px-4 gap-4">
         <View className="flex flex-row w-full px-2 items-center justify-between">
           <Text className="text-xl font-bold">Sua lista de compras</Text>
 
-          <TouchableOpacity className="flex flex-row gap-1 items-center">
+          <TouchableOpacity onPress={() => setOpenModal(true)} className="flex flex-row gap-1 items-center">
             <Feather name="plus" color="#0891b2" size={20} />
             <Text className="uppercase text-cyan-500">Adicionar</Text>
           </TouchableOpacity>
@@ -176,10 +307,10 @@ export default function App() {
             <View className="w-full flex flex-row items-center justify-between p-4 rounded-md border border-gray-400">
               <View>
                 <Text className="text-xl font-bold">{item.description}</Text>
-                <Text>Quantidade: {item.uni}</Text>
-                <Text>Valor: {item.amount}</Text>
+                <Text>Qtd:. {item.uni} Valor: {formatCurrency(item.amount)}</Text>
+                <Text className="text-md font-bold">Total: {formatCurrency(item.uni * item.amount)}</Text>
               </View>
-              <TouchableOpacity>
+              <TouchableOpacity onPress={() => handleDelete(item.id)} >
                 <Feather name="trash" color="red" size={24} />
               </TouchableOpacity>
             </View>
